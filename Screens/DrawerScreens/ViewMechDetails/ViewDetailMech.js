@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Button, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; 
 import { auth, db } from "../../../firebase/firebase.config";
-import { collection, getDoc, doc, addDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, getDoc, doc, addDoc, getDocs, query, where,updateDoc } from "firebase/firestore";
 const { width } = Dimensions.get('window');
 
 const MechanicDetailsScreen = ({ route, navigation }) => {
@@ -64,13 +64,20 @@ const MechanicDetailsScreen = ({ route, navigation }) => {
         status: "pending",
         createdAt: new Date().toISOString()
       });
-      console.log("Document written with ID: ", docRef.id);
+  
+      const docId = docRef.id; // Get the ID of the added document
+  
+      // Update the document with its own ID
+      await updateDoc(doc(db, "User_Request_of_services", docId), { id: docId });
+  
+      console.log("Document written with ID: ", docId);
       Alert.alert('Your request has been submitted', 'You will be notified soon about request approval!');
     } catch (error) {
       Alert.alert('Error', 'Failed to submit your request.');
       console.error(error);
     }
   };
+  
 
   const handleLiveLocation = () => {
     // Code to handle viewing mechanic's live location
@@ -93,16 +100,14 @@ const MechanicDetailsScreen = ({ route, navigation }) => {
         {userData.someData && <Text style={styles.info}>User Data: {userData.someData}</Text>}
         
         {services && services.length > 0 && services[0].status === "pending" ? (
-          <Text style={styles.info}>Your request is sent to the mechanic.</Text>
+          <Text style={styles.pendingInfo}>Your request is sent to the mechanic.</Text>
         ) : services && services.length > 0 && services[0].status === "accepted" ? (
           <TouchableOpacity style={styles.button} onPress={handleLiveLocation}>
             <Text style={styles.buttonText}>Mechanic's Live Location</Text>
           </TouchableOpacity>
-        ) : services && services.length > 0 && services[0].status === "rejected" (
-          <Text style={styles.info}>Your request is rejected.</Text>
-        )}
-
-        {services && services.length === 0 && (
+        ) : services && services.length > 0 && services[0].status === "rejected" ? (
+          <Text style={[styles.info, styles.rejectedText]}>Your request is rejected.</Text>
+        ) : (
           <TouchableOpacity style={styles.button} onPress={handleRequest} >
             <Text style={styles.buttonText}>Request a Service</Text>
           </TouchableOpacity>
@@ -167,6 +172,21 @@ const styles = StyleSheet.create({
     fontSize: width * 0.05,
     color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  rejectedText: {
+    color: 'red',
+    fontWeight:'bold',
+    textAlign:'center',
+    fontSize:20
+
+    
+  },
+  pendingInfo: {
+    color: 'orange', // or any other color for pending status
+    
+    fontWeight:'bold',
+    textAlign:'center',
+    fontSize:20
   },
 });
 

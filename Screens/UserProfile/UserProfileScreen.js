@@ -1,20 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Dimensions } from 'react-native';
 import { FontAwesome, FontAwesome5 } from '@expo/vector-icons';
-import { useImagePicker } from '../../hooks/ImagePickerHook';
-import MyTabs from '../../hooks/UserTabNavigator';
+import * as ImagePicker from 'expo-image-picker'; // Import ImagePicker
 import { LinearGradient } from 'expo-linear-gradient';
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 
-import { auth, db } from "../../firebase/firebase.config";
+import { auth, db, storage } from "../../firebase/firebase.config";
 
 const { width, height } = Dimensions.get('window');
 
-const UserProfileScreen = ({ navigation}) => {
-    const { profileImage, handleProfileImagePress } = useImagePicker();
+const UserProfileScreen = ({ navigation }) => {
+
     const [userData, setUserData] = useState(null); // Initialize as null to indicate data is loading
-  
+    const [profileImage, setProfileImage] = useState(null); // Profile image state
+
     useEffect(() => {
         const user = auth.currentUser;
         if (user) {
@@ -25,11 +26,81 @@ const UserProfileScreen = ({ navigation}) => {
                     console.log("No such document!");
                 }
             });
-    
+
             return () => unsubscribe(); // Unsubscribe when component unmounts
         }
     }, []); // Run only once when component mounts
-  
+
+    const pickProfileImage = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 1,
+            });
+
+            if (!result.canceled) {
+                setProfileImage(result.uri);
+            }
+        } catch (error) {
+            // console.log('Error picking image: ', error);
+        }
+    };
+
+    const handleProfileImageUpload = async () => {
+        if (profileImage) {
+            try {
+                const imageUrl = await uploadImageToStorage(profileImage, 'profileImage.jpg');
+                console.log('Image uploaded successfully:', imageUrl);
+
+                // Update profile image URL in Firestore
+                const userRef = doc(db, "users", auth.currentUser.uid);
+                await updateDoc(userRef, {
+                    profileImageUrl: imageUrl // Update profileImageUrl field in Firestore
+                });
+
+                // Update profile image URL in userData state
+                setUserData(prevUserData => ({
+                    ...prevUserData,
+                    profileImageUrl: imageUrl
+                }));
+            } catch (error) {
+                // console.error('Error uploading image:', error);
+                // Handle error
+            }
+        }
+    };
+
+    const uploadImageToStorage = async (imageUri, imageName) => {
+        const fileExtension = imageName.split('.').pop();
+        const uniqueFileName = `${Date.now()}_${Math.floor(Math.random() * 100000)}.${fileExtension}`;
+
+        const storageRef = ref(storage, 'images/' + uniqueFileName);
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        const uploadTask = uploadBytesResumable(storageRef, blob);
+
+        return new Promise((resolve, reject) => {
+            uploadTask.on('state_changed',
+                (snapshot) => { },
+                (error) => {
+                    console.error("Error uploading image: ", error);
+                    reject(error);
+                },
+                () => {
+                    getDownloadURL(uploadTask.snapshot.ref)
+                        .then((downloadURL) => {
+                            resolve(downloadURL);
+                        })
+                        .catch((error) => {
+                            console.error("Error getting download URL: ", error);
+                            reject(error);
+                        });
+                }
+            );
+        });
+    };
+
     if (!userData) {
         return (
             <View style={styles.loadingContainer}>
@@ -37,19 +108,19 @@ const UserProfileScreen = ({ navigation}) => {
             </View>
         );
     }
-  
+
     return (
         <ScrollView style={styles.container}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Icon name="arrow-back" size={30} color="#000" />
+                <Icon name="arrow-back" size={30} color="#000" />
             </TouchableOpacity>
             <LinearGradient
                 colors={['#FFA726', '#FB8C00', '#FF6F00']}
                 style={styles.linearGradient}>
                 <View style={styles.headerContainer}>
-                    <TouchableOpacity style={styles.profileContainer} onPress={handleProfileImagePress}>
+                    <TouchableOpacity style={styles.profileContainer} onPress={pickProfileImage}>
                         <Image
-                            source={profileImage ? { uri: profileImage } : require('../../assets/Icons/userDefault.png')}
+                            source={profileImage ? { uri: profileImage } : userData.profileImageUrl ? { uri: userData.profileImageUrl } : require('../../assets/Icons/userDefault.png')}
                             style={styles.profileImage}
                         />
                     </TouchableOpacity>
@@ -61,10 +132,12 @@ const UserProfileScreen = ({ navigation}) => {
                 <Text style={styles.detailText}>Username: {userData.name}</Text>
                 <Text style={styles.detailText}>Email: {userData.email}</Text>
                 <Text style={styles.detailText}>Phone: {userData.phone}</Text>
+                <TouchableOpacity style={styles.button} onPress={handleProfileImageUpload}>
+                    <Text style={styles.buttonText}>Upload Profile Image</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('EditDetails')}>
                     <Text style={styles.buttonText}>Edit Details</Text>
                 </TouchableOpacity>
-                <MyTabs />
             </View>
         </ScrollView>
     );

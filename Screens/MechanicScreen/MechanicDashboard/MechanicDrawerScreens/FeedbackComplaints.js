@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Button, Alert, TouchableOpacity, Dimensions, ScrollView, 
-    KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from 'react-native';
+    KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from "../../../../firebase/firebase.config.js";
 import { collection, addDoc } from "firebase/firestore";
@@ -25,7 +25,7 @@ const FeedbackForm = ({ navigation }) => {
     }
 
     try {
-      const docRef = await addDoc(collection(db, "Usercomplaint"), {
+      const docRef = await addDoc(collection(db, "MechanicsComplaint"), {
         username,
         email,
         selectedEmoji,
@@ -38,7 +38,6 @@ const FeedbackForm = ({ navigation }) => {
       setEmail('');
       setSelectedEmoji('');
       setSuggestions('');
-      setCategory(''); // Reset category
     } catch (error) {
       Alert.alert('Error', 'Failed to submit your feedback.');
       console.error(error);
@@ -155,14 +154,6 @@ const styles = StyleSheet.create({
     fontSize: width * 0.05,
     color: '#FFFFFF',
     fontWeight: 'bold',
-  },
-  picker: {
-    width: '100%',
-    marginBottom: 20,
-    height:50,
-    color:'#000',
-    borderColor:'#000',
-    borderRadius:20,
   },
 });
 

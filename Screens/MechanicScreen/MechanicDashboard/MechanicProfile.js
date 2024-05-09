@@ -12,23 +12,37 @@ const ProfileSettings = ({ }) => {
   const { profileImage, handleProfileImagePress } = useImagePicker();
   const [userData , setUserData]=useState();
   const [email, setEmail] = useState();
-
+  const [mech, setmech]=useState();
 
 
   useEffect(() => {
     const user = auth.currentUser;
     if (user) {
-        const unsubscribe = onSnapshot(doc(db, "users", user.uid), (doc) => {
-            if (doc.exists()) {
-                setUserData(doc.data());
-            } else {
-                console.log("No such document!");
-            }
-        });
-
-        return () => unsubscribe(); // Unsubscribe when component unmounts
+      const unsubscribe = onSnapshot(doc(db, "users", user.uid), (doc) => {
+        if (doc.exists()) {
+          setUserData(doc.data());
+        } else {
+          console.log("No such document!");
+        }
+      });
+  
+      return () => unsubscribe(); // Unsubscribe when component unmounts
     }
-}, []);
+  
+    if (user) {
+      const unsubscribe = onSnapshot(doc(db, "Mechdata", user.uid), (doc) => {
+        if (doc.exists()) {
+          setmech(doc.data());
+          console.log(doc.data())
+        } else {
+          console.log("No such document!");
+        }
+      });
+  
+      return () => unsubscribe(); // Unsubscribe when component unmounts
+    }
+  }, []);
+  
 
 
   return (
@@ -42,11 +56,16 @@ const ProfileSettings = ({ }) => {
         <View style={styles.profileSection}>
         <Text style={styles.headerTitle}>Profile Management</Text>
         <TouchableOpacity style={styles.profileContainer} onPress={handleProfileImagePress}>
-                        <Image
-                            source={profileImage ? { uri: profileImage } : require('../../../assets/Icons/userDefault.png')}
-                            style={styles.profileImage}
-                        />
-        </TouchableOpacity>
+    <Image
+        source={
+            profileImage ? { uri: profileImage } :
+            (userData && userData.profileImageUrl) ? { uri: userData.profileImageUrl } :
+            require('../../../assets/Icons/userDefault.png')
+        }
+        style={styles.profileImage}
+    />
+</TouchableOpacity>
+
           <Text style={styles.userName}> {userData ? userData.name :'Loading...'}</Text>
           <Text style={styles.userEmail}>{userData ? userData.email :'Loading...'}</Text>
         </View>

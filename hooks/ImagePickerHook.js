@@ -1,6 +1,7 @@
-// utils/imagePickerUtils.js or hooks/useImagePicker.js
+// hooks/ImagePickerHook.js
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
+import { ref, storage, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 export const useImagePicker = () => {
   const [profileImage, setProfileImage] = useState(null);
@@ -25,8 +26,43 @@ export const useImagePicker = () => {
     }
   };
 
+  const uploadImageToStorage = async (imageUri, imageName) => {
+    const fileExtension = imageName.split('.').pop(); // Get the file extension
+    const uniqueFileName = `${Date.now()}_${imageName}`; // Use a unique identifier for the image name
+
+    const storageRef = ref(storage, 'images/' + uniqueFileName);
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const uploadTask = uploadBytesResumable(storageRef, blob);
+
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          // Handle upload progress if needed
+        },
+        (error) => {
+          console.error("Error uploading image: ", error);
+          reject(error);
+        },
+        () => {
+          getDownloadURL(uploadTask.snapshot.ref)
+            .then((downloadURL) => {
+              resolve(downloadURL);
+            })
+            .catch((error) => {
+              console.error("Error getting download URL: ", error);
+              reject(error);
+            });
+        }
+      );
+    });
+  };
+
   return {
     profileImage,
     handleProfileImagePress,
+    uploadImageToStorage,
   };
 };
+

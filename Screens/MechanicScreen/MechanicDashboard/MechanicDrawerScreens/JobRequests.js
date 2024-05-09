@@ -2,20 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db } from "../../../../firebase/firebase.config";
-import { collection, getDocs,getDoc, query, where, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, getDoc, query, where, doc, updateDoc } from "firebase/firestore";
 
 const JobRequestsScreen = ({ navigation }) => {
   const [services, setServices] = useState([]);
+  const [isLoading, setIsLoading] = useState(true); // Added state for loading
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setIsLoading(true); // Set loading to true while fetching data
         // Fetch data from User_Request_of_services collection for current user
         const requestSnapshot = await getDocs(query(collection(db, "User_Request_of_services"), where("mechanicId", "==", auth.currentUser.uid)));
         const requestData = requestSnapshot.docs.map(doc => doc.data());
         console.log("Request data:", requestData);
 
         setServices(requestData);
+        setIsLoading(false); // Set loading to false after fetching
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -24,50 +27,46 @@ const JobRequestsScreen = ({ navigation }) => {
     fetchData();
   }, []);
 
-  const handleAccept = async (userid) => {
+  const handleAccept = async (item) => { // Use the entire item object
     try {
-      console.log("Accepting user with userid:", userid);
-      const docRef = await doc(db, "User_Request_of_services", userid);
-      const docSnapshot = await getDoc(docRef);
-  console.log(docSnapshot)
-      if (docSnapshot.exists()) {
-        // Update the document
-        console.log("data is update.....")
-        await updateDoc(docRef, {
-          status: "accepted",
-        });
-  
-        console.log("Document updated successfully");
-      } else {
-        console.log("Document does not exist");
-      }
+      console.log(item.userid)
+      const docRef = doc(db, "User_Request_of_services", item.id);
+      await updateDoc(docRef, {
+        status: "accepted",
+      });
+      const updatedData = services.map((service) => {
+        if (service.userid === item.userid) {
+          return { ...service, status: "accepted" };
+        }
+        return service;
+      });
+      setServices(updatedData);
     } catch (error) {
       console.error("Error accepting application: ", error);
     }
   };
-  
 
-  const handleReject = async (userid) => {
+  const handleReject = async (item) => {
     try {
       // Check if the document exists
-      const docRef = doc(db, "User_Request_of_services", userid);
+      const docRef = doc(db, "User_Request_of_services", item.id);
       const docSnapshot = await getDoc(docRef);
-  console.log(docSnapshot)
+
       if (docSnapshot.exists()) {
         // Update the document
         await updateDoc(docRef, {
           status: "rejected",
         });
-  
+
         // Update the local state
-        const updatedServices = services.map((item) => {
-          if (item.userid === userid) {
-            return { ...item, status: "rejected" };
+        const updatedServices = services.map((service) => {
+          if (service.userid === item.userid) {
+            return { ...service, status: "rejected" };
           }
-          return item;
+          return service;
         });
-  
-        setServices(updatedServices); // Update the local state
+
+        setServices(updatedServices);
       } else {
         console.log("Document does not exist");
       }
@@ -75,24 +74,46 @@ const JobRequestsScreen = ({ navigation }) => {
       console.error("Error rejecting application: ", error);
     }
   };
-    const renderServiceItem = ({ item }) => (
+
+  const renderServiceItem = ({ item }) => (
     <View style={styles.card}>
       <Text style={styles.title}>{item.name}</Text>
-      <Text style={styles.detail}>Service Needed: {item.serviceNeed}</Text>
-      <Text style={styles.detail}>Email: {item.userid}</Text>
+      <Text style={styles.detail}>Service Need: {item.serviceNeed}</Text>
+      <Text style={styles.detail}>Email: {item.email}</Text>
       <Text style={styles.detail}>Phone: {item.phone}</Text>
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={() => handleAccept(item.userid)}>
-          <Text style={styles.buttonText}>Accept</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={() => handleReject(item.userid)}>
-          <Text style={styles.buttonText}>Reject</Text>
-        </TouchableOpacity>
-      </View>
+      {item.status === "accepted" ? (
+        <>
+          <Text style={[styles.status, styles.acceptedStatus]}>You Accept this Request.</Text>
+          <TouchableOpacity style={[styles.button, styles.rejectButton2]} onPress={() => handleReject(item)}>
+            <Text style={styles.buttonText}>View the user Location</Text>
+          </TouchableOpacity>
+        </>
+      ) : item.status === "rejected" ? (
+        <>
+          <Text style={[styles.status, styles.rejectedStatus]}>You Reject this Request.</Text>
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={() => handleAccept(item)}>
+              <Text style={styles.buttonText}>Accept</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={() => handleReject(item)}>
+              <Text style={styles.buttonText}>Reject</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={() => handleAccept(item)}>
+            <Text style={styles.buttonText}>Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={() => handleReject(item)}>
+            <Text style={styles.buttonText}>Reject</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
-  return (
+      return (
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -100,11 +121,16 @@ const JobRequestsScreen = ({ navigation }) => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>User's Requests</Text>
       </View>
-      <FlatList
-        data={services}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={renderServiceItem}
-      />
+      {isLoading ? (
+        // Display loading indicator while data is being fetched
+        <Text>Loading requests...</Text>
+      ) : (
+        <FlatList
+          data={services}
+          keyExtractor={(item) => item.userid} // Use unique identifier (e.g., userid)
+          renderItem={renderServiceItem}
+        />
+      )}
     </View>
   );
 };
@@ -112,6 +138,19 @@ const JobRequestsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  acceptedStatus: {
+    color: 'green',
+    fontWeight:'bold',
+    textAlign:'center'
+
+  },
+  
+  rejectedStatus: {
+    color: 'red',
+    fontWeight:'bold',
+    textAlign:'center'
+
   },
   header: {
     flexDirection: 'row',
@@ -150,6 +189,8 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    marginTop:20,
+
   },
   button: {
     paddingVertical: 8,
@@ -158,12 +199,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 5,
+    
   },
   acceptButton: {
     backgroundColor: '#4CAF50',
   },
   rejectButton: {
     backgroundColor: '#F44336',
+  },
+  rejectButton2:{
+    marginTop:20,
+    backgroundColor: 'blue',
   },
   buttonText: {
     color: '#fff',

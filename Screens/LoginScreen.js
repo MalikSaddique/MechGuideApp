@@ -87,7 +87,7 @@ const LoginScreen = ({ navigation }) => {
 
     } catch (error) {
       setError("Login failed. Please check your credentials.");
-      console.error("Login error:", error.message);
+      // console.error("Login error:", error.message);
     }
     finally {
       setLoading(false);

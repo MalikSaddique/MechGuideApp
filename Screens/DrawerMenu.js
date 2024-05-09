@@ -75,11 +75,18 @@ const DrawerMenu = (props) => {
     style={styles.linearGradient}>
       <View style={styles.userInfoSection}>
       <TouchableOpacity onPress={handleProfileImagePress}>
-          <Image
-            source={profileImage ? { uri: profileImage } : require('../assets/Icons/userDefault.png')} 
-            style={styles.userImage}
-          />
-      </TouchableOpacity>
+    <Image
+        source={
+            profileImage ? 
+            { uri: profileImage } : 
+            (userData && userData.profileImageUrl) ? 
+            { uri: userData.profileImageUrl } : 
+            require('../assets/Icons/userDefault.png')
+        }
+        style={styles.userImage}
+    />
+</TouchableOpacity>
+
       <TouchableOpacity style={styles.profileTextContainer} onPress={()=>navigation.navigate('UserProfile')}>
           <Text style={styles.userName}>{userData ? userData.name : 'Loading...'}</Text>
           <Icon name="arrow-forward" style={styles.arrowIcon} />

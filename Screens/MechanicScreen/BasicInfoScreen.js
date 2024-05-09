@@ -1,38 +1,98 @@
-import React, { useContext, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image , Dimensions} from 'react-native';
-import { useRegistrationData } from '../../hooks/RegistrationDataContext';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useRegistrationData } from '../../hooks/RegistrationDataContext';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useImagePicker } from '../../hooks/ImagePickerHook';
-
-const {width, height}= Dimensions.get('window')
+import { storage } from '../../firebase/firebase.config';
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 const BasicInformationScreen = ({ navigation }) => {
   const { registrationData, updateRegistrationData } = useRegistrationData();
   const [firstName, setFirstName] = useState(registrationData.firstName);
   const [lastName, setLastName] = useState(registrationData.lastName);
-  const { profileImage, handleProfileImagePress } = useImagePicker();
+  const [profileImage, setProfileImage] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
+  const pickProfileImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
 
-  const handleNext = () => {
-    updateRegistrationData({ firstName, lastName });
-    navigation.navigate('MechCNICScreen');
+      if (!result.cancelled) {
+        setProfileImage(result.uri);
+      }
+    } catch (error) {
+      console.log('Error picking image: ', error);
+    }
+  };
+
+  const handleNext = async () => {
+    try {
+      setIsLoading(true);
+
+      const profileImageUrl = await uploadImageToStorage(profileImage, 'profile_image.jpg');
+
+      updateRegistrationData({ firstName, lastName, profileImage: profileImageUrl });
+      navigation.navigate('MechCNICScreen');
+    } catch (error) {
+      console.error("Error: ", error);
+      Alert.alert('Error', 'Failed to proceed. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const uploadImageToStorage = async (imageUri, imageName) => {
+    const fileExtension = imageName.split('.').pop();
+    const uniqueFileName = `${Date.now()}_${Math.floor(Math.random() * 100000)}.${fileExtension}`;
+
+    const storageRef = ref(storage, 'images/' + uniqueFileName);
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const uploadTask = uploadBytesResumable(storageRef, blob);
+
+    return new Promise((resolve, reject) => {
+      uploadTask.on('state_changed',
+        (snapshot) => {},
+        (error) => {
+          console.error("Error uploading image: ", error);
+          reject(error);
+        },
+        () => {
+          getDownloadURL(uploadTask.snapshot.ref)
+            .then((downloadURL) => {
+              resolve(downloadURL);
+            })
+            .catch((error) => {
+              console.error("Error getting download URL: ", error);
+              reject(error);
+            });
+        }
+      );
+    });
   };
 
   return (
     <View style={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Icon name="arrow-back" size={30} color="#000" />
       </TouchableOpacity>
       <Text style={styles.title}>Basic Information</Text>
 
-      <TouchableOpacity  onPress={handleProfileImagePress}>
+      <TouchableOpacity onPress={pickProfileImage}>
         <View style={styles.imagePicker}>
-          <Image
-            source={profileImage ? { uri: profileImage } : require('../../assets/Icons/userDefault.png')}
-            style={styles.profileImage}
-          />
-            <Text style={styles.imagePickerText}>Upload a profile picture</Text>
+          {profileImage ? (
+            <Image source={{ uri: profileImage }} style={styles.profileImage} />
+          ) : (
+            <Image
+              source={require('../../assets/Icons/userDefault.png')}
+              style={styles.profileImage}
+            />
+          )}
+          <Text style={styles.imagePickerText}>Upload a profile picture</Text>
         </View>
       </TouchableOpacity>
 
@@ -51,7 +111,11 @@ const BasicInformationScreen = ({ navigation }) => {
       />
 
       <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-        <Text style={styles.buttonText}>Next</Text>
+        {isLoading ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Text style={styles.buttonText}>Next</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -64,13 +128,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
-  backButton:{
-    position: 'absolute', // Position absolutely so it can be placed over other content
-    top: Platform.OS === 'ios' ? 44 : 20, // Spacing from the top, adjust for different platforms if needed
-    left: 10, // Spacing from the left
-    zIndex: 10, // Ensure it sits above other content
-    backgroundColor: 'transparent', // No background color
-    padding: 20, // Add padding to increase the touchable area
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 44 : 20,
+    left: 10,
+    zIndex: 10,
+    backgroundColor: 'transparent',
+    padding: 20,
   },
   title: {
     fontSize: 22,
@@ -116,7 +180,6 @@ const styles = StyleSheet.create({
   imagePickerText: {
     color: 'gray',
     textAlign: 'center',
-    
   },
 });
 
