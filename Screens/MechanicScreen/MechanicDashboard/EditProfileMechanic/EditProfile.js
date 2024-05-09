@@ -3,7 +3,8 @@ import { View, Text, TextInput, StyleSheet, Switch, TouchableOpacity, ScrollView
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-
+import { auth, db } from "../../../../firebase/firebase.config";
+import { collection, addDoc, doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 const EditMechanicProfileScreen = ({ navigation }) => {
     const [shopName, setShopName] = useState('');
     const [servicesOffered, setServicesOffered] = useState('');
@@ -48,11 +49,47 @@ const EditMechanicProfileScreen = ({ navigation }) => {
         setMapVisible(false);
     };
 
-    const handleSave = () => {
-        console.log("Saving profile data...");
-        Alert.alert("Profile Updated", "Your info has been updated!");
-        //
+    const handleSave = async () => {
+        try {
+            const user = auth.currentUser;
+            if (user) {
+                const docRef = doc(db, 'Mechanicprofile_details', user.uid);
+                const docSnap = await getDoc(docRef);
+    
+                if (docSnap.exists()) {
+                    // Document exists, update details
+                    await updateDoc(docRef, {
+                        shopName: shopName,
+                        servicesOffered: servicesOffered,
+                        pricing: pricing,
+                        availability: availability,
+                        location: location,
+                        mechid:user.uid
+                        // Add other fields as needed
+                    });
+                    Alert.alert("Profile Updated", "Your info has been updated!");
+                } else {
+                    // Document doesn't exist, add new details
+                    await setDoc(docRef, {
+                        shopName: shopName,
+                        servicesOffered: servicesOffered,
+                        pricing: pricing,
+                        availability: availability,
+                        location: location,
+                        mechid:user.uid
+
+                        // Add other fields as needed
+                    });
+                    Alert.alert("Profile Created", "Your profile has been created!");
+                }
+            } else {
+                console.error("User not found or not logged in.");
+            }
+        } catch (error) {
+            console.error("Error saving user profile:", error);
+        }
     };
+    
 
     return (
         <ScrollView style={styles.container}>

@@ -1,10 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { mockMechanics } from './mockMechanics';
+import { auth, db } from "../../firebase/firebase.config";
+import { collection, getDocs } from "firebase/firestore";
 
 const MechanicsListScreen = ({ navigation }) => {
-  const mechanics = mockMechanics; // useMechanics() here for backend;
+  const [mechanics, setMechanics] = useState([]);
+  useEffect(() => {
+    const fetchMechanics = async () => {
+      try {
+        const mechanicsRef = collection(db, 'Mechanicprofile_details');
+        const snapshot = await getDocs(mechanicsRef);
+        const mechanicsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMechanics(mechanicsData);
+        console.log(mechanicsData)
+      } catch (error) {
+        console.error('Error fetching mechanics:', error);
+      }
+    };
+
+    fetchMechanics();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -23,9 +39,10 @@ const MechanicsListScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('ViewMechanicsDetail', { mechanicId: item.id })}
           >
             <Text style={styles.title}>{item.name} - {item.shopName}</Text>
-            <Text style={styles.details}>{item.servicesOffered.join(', ')}</Text>
-            <Text style={styles.details}>{item.location}</Text>
-            <Text style={styles.details}>{item.pricing}</Text>
+            <Text style={styles.details}>Services Offered: {item.servicesOffered}</Text>
+            <Text style={styles.details}>Location: {item.location}</Text>
+            <Text style={styles.details}>Pricing: {item.pricing}</Text>
+            <Text style={styles.details}>Availability: {item.availability ? 'Available' : 'Not Available'}</Text>
           </TouchableOpacity>
         )}
         contentContainerStyle={styles.listContainer}

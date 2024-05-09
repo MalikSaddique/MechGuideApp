@@ -1,50 +1,109 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const mockRequests = [
-  { id: '1', userName: 'Saddique', serviceRequested: 'Oil Change', status: 'pending' },
-  { id: '2', userName: 'Asif', serviceRequested: 'Tire Replacement', status: 'pending' },
- 
-];
+import { auth, db } from "../../../../firebase/firebase.config";
+import { collection, getDocs,getDoc, query, where, doc, updateDoc } from "firebase/firestore";
 
 const JobRequestsScreen = ({ navigation }) => {
+  const [services, setServices] = useState([]);
 
-  const handleAccept = (id) => {
-    // Add logic to accept the job request
-    console.log('Accepting request:', id);
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch data from User_Request_of_services collection for current user
+        const requestSnapshot = await getDocs(query(collection(db, "User_Request_of_services"), where("mechanicId", "==", auth.currentUser.uid)));
+        const requestData = requestSnapshot.docs.map(doc => doc.data());
+        console.log("Request data:", requestData);
 
-  const handleReject = (id) => {
-    // Add logic to reject the job request
-    console.log('Rejecting request:', id);
+        setServices(requestData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const handleAccept = async (userid) => {
+    try {
+      console.log("Accepting user with userid:", userid);
+      const docRef = await doc(db, "User_Request_of_services", userid);
+      const docSnapshot = await getDoc(docRef);
+  console.log(docSnapshot)
+      if (docSnapshot.exists()) {
+        // Update the document
+        console.log("data is update.....")
+        await updateDoc(docRef, {
+          status: "accepted",
+        });
+  
+        console.log("Document updated successfully");
+      } else {
+        console.log("Document does not exist");
+      }
+    } catch (error) {
+      console.error("Error accepting application: ", error);
+    }
   };
+  
+
+  const handleReject = async (userid) => {
+    try {
+      // Check if the document exists
+      const docRef = doc(db, "User_Request_of_services", userid);
+      const docSnapshot = await getDoc(docRef);
+  console.log(docSnapshot)
+      if (docSnapshot.exists()) {
+        // Update the document
+        await updateDoc(docRef, {
+          status: "rejected",
+        });
+  
+        // Update the local state
+        const updatedServices = services.map((item) => {
+          if (item.userid === userid) {
+            return { ...item, status: "rejected" };
+          }
+          return item;
+        });
+  
+        setServices(updatedServices); // Update the local state
+      } else {
+        console.log("Document does not exist");
+      }
+    } catch (error) {
+      console.error("Error rejecting application: ", error);
+    }
+  };
+    const renderServiceItem = ({ item }) => (
+    <View style={styles.card}>
+      <Text style={styles.title}>{item.name}</Text>
+      <Text style={styles.detail}>Service Needed: {item.serviceNeed}</Text>
+      <Text style={styles.detail}>Email: {item.userid}</Text>
+      <Text style={styles.detail}>Phone: {item.phone}</Text>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={() => handleAccept(item.userid)}>
+          <Text style={styles.buttonText}>Accept</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={() => handleReject(item.userid)}>
+          <Text style={styles.buttonText}>Reject</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-        <View style={styles.header}>
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>User's Requests</Text>
       </View>
       <FlatList
-        data={mockRequests}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.requestItem}>
-            <Text style={styles.title}>{item.userName}</Text>
-            <Text>{item.serviceRequested}</Text>
-            <View style={styles.buttonsContainer}>
-              <TouchableOpacity style={styles.acceptButton} onPress={() => handleAccept(item.id)}>
-                <Text style={styles.buttonText}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.rejectButton} onPress={() => handleReject(item.id)}>
-                <Text style={styles.buttonText}>Reject</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        data={services}
+        keyExtractor={(item, index) => index.toString()}
+        renderItem={renderServiceItem}
       />
     </View>
   );
@@ -53,7 +112,6 @@ const JobRequestsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // padding: 10,
   },
   header: {
     flexDirection: 'row',
@@ -61,7 +119,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF7A00',
     paddingVertical: 20,
     paddingHorizontal: 15,
-    marginTop:30
+    marginTop: 30,
   },
   headerTitle: {
     color: '#fff',
@@ -69,11 +127,11 @@ const styles = StyleSheet.create({
     marginLeft: 20,
     fontWeight: 'bold',
   },
-  requestItem: {
+  card: {
     backgroundColor: '#fff',
     padding: 20,
     marginVertical: 8,
-    borderRadius: 5,
+    borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -81,27 +139,36 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  detail: {
+    fontSize: 16,
     marginBottom: 5,
   },
-  buttonsContainer: {
+  buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
+  button: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 5,
+  },
   acceptButton: {
     backgroundColor: '#4CAF50',
-    padding: 10,
-    borderRadius: 5,
-    marginRight: 10,
   },
   rejectButton: {
     backgroundColor: '#F44336',
-    padding: 10,
-    borderRadius: 5,
   },
   buttonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

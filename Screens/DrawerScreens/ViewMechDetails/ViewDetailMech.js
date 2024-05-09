@@ -1,27 +1,81 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Button, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
-import { mockMechanics } from '../mockMechanics';
 import { Ionicons } from '@expo/vector-icons'; 
-
+import { auth, db } from "../../../firebase/firebase.config";
+import { collection, getDoc, doc, addDoc, getDocs, query, where } from "firebase/firestore";
 const { width } = Dimensions.get('window');
 
 const MechanicDetailsScreen = ({ route, navigation }) => {
   const { mechanicId } = route.params;
   const [mechanic, setMechanic] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [services, setServices] = useState([]);
 
   useEffect(() => {
-    const foundMechanic = mockMechanics.find(m => m.id === mechanicId); //here useMechanic in space of mockMechanics for backend
-    setMechanic(foundMechanic);
-  }, [mechanicId]);
+    const fetchData = async () => {
+      try {
+        const mechanicRef = doc(db, 'Mechanicprofile_details', mechanicId);
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        
+        const [mechanicDoc, userDoc] = await Promise.all([
+          getDoc(mechanicRef),
+          getDoc(userRef),
+        ]);
+        
+        if (mechanicDoc.exists() && userDoc.exists()) {
+          setMechanic(mechanicDoc.data());
+          setUserData(userDoc.data());
+          console.log(mechanicId)
+          console.log("userdata", userDoc.data());
+        } else {
+          console.log('No document!');
+        }
+    
+        // Fetch data from User_Request_of_services collection for current user
+        const requestSnapshot = await getDocs(query(collection(db, "User_Request_of_services"),  where("mechanicId", "==", mechanicId),
+        where("userid", "==", auth.currentUser.uid)
+      ));
+        const requestData = requestSnapshot.docs.map(doc => doc.data());
+        console.log("Request data:", requestData);
 
-  if (!mechanic) {
+        setServices(requestData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    fetchData();
+  }, [mechanicId]);
+  
+  if (!mechanic || !userData || services === null) {
     return <Text>Loading...</Text>; 
   }
 
-//   Handle Request
-  const handleRequest=()=>{
-   Alert.alert('Your request have been submitted', 'You will be notify soon about request approval!');
-  }
+  // Handle Request
+  const handleRequest = async () => {
+    try {
+      const docRef = await addDoc(collection(db, "User_Request_of_services"), {
+        name: userData.name, // Corrected access to userData properties
+        email: userData.email,
+        phone: userData.phone,
+        serviceNeed: mechanic.servicesOffered,
+        mechanicId: mechanicId,
+        userid:auth.currentUser.uid,
+        status: "pending",
+        createdAt: new Date().toISOString()
+      });
+      console.log("Document written with ID: ", docRef.id);
+      Alert.alert('Your request has been submitted', 'You will be notified soon about request approval!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to submit your request.');
+      console.error(error);
+    }
+  };
+
+  const handleLiveLocation = () => {
+    // Code to handle viewing mechanic's live location
+    // You can implement this according to your requirements
+  };
 
   return (
     <View style={styles.container}>
@@ -29,16 +83,30 @@ const MechanicDetailsScreen = ({ route, navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{mechanic.name}</Text>
+        <Text style={styles.headerTitle}>{mechanic.shopName}</Text>
       </View>
       <View style={styles.detailsContainer}>
         <Text style={styles.shopName}>{mechanic.shopName}</Text>
-        <Text style={styles.info}>Services: {mechanic.servicesOffered.join(', ')}</Text>
+        <Text style={styles.info}>Services: {mechanic.servicesOffered}</Text>
         <Text style={styles.info}>Location: {mechanic.location}</Text>
         <Text style={styles.info}>Pricing: {mechanic.pricing}</Text>
-         <TouchableOpacity style={styles.button} onPress={handleRequest} >
+        {userData.someData && <Text style={styles.info}>User Data: {userData.someData}</Text>}
+        
+        {services && services.length > 0 && services[0].status === "pending" ? (
+          <Text style={styles.info}>Your request is sent to the mechanic.</Text>
+        ) : services && services.length > 0 && services[0].status === "accepted" ? (
+          <TouchableOpacity style={styles.button} onPress={handleLiveLocation}>
+            <Text style={styles.buttonText}>Mechanic's Live Location</Text>
+          </TouchableOpacity>
+        ) : services && services.length > 0 && services[0].status === "rejected" (
+          <Text style={styles.info}>Your request is rejected.</Text>
+        )}
+
+        {services && services.length === 0 && (
+          <TouchableOpacity style={styles.button} onPress={handleRequest} >
             <Text style={styles.buttonText}>Request a Service</Text>
           </TouchableOpacity>
+        )}
       </View>
     </View>
   );
